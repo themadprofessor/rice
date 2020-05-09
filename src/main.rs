@@ -6,6 +6,7 @@ use procfs::process::Process;
 use std::ffi::OsStr;
 use std::str::FromStr;
 
+mod class;
 mod parse;
 mod proc_type;
 mod rule;

@@ -22,9 +22,9 @@ where
             continue;
         }
 
-        match serde_json::from_str::<T>(&line).context::<&str>("failed to parse rule") {
+        match serde_json::from_str::<T>(&line).context::<&str>("failed to parse") {
             Ok(t) => func(t),
-            Err(e) => eprintln!("{}", e),
+            Err(e) => eprintln!("{:?}", e),
         }
     }
     Ok(())

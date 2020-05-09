@@ -1,3 +1,4 @@
+use crate::class::IoClass;
 use anyhow::Result;
 use libc::c_int;
 use serde::Deserialize;
@@ -10,8 +11,8 @@ struct RawType {
     #[serde(alias = "type")]
     proc_type: String,
     nice: Option<c_int>,
-    ioclass: Option<String>,
-    ionice: Option<c_int>,
+    ioclass: Option<IoClass>,
+    ionice: Option<u8>,
     cgroup: Option<String>,
     oom_scote_adj: Option<c_int>,
 }
@@ -19,8 +20,8 @@ struct RawType {
 #[derive(Debug, PartialEq, Clone)]
 pub struct Type {
     pub nice: Option<c_int>,
-    pub ioclass: Option<String>,
-    pub ionice: Option<c_int>,
+    pub ioclass: Option<IoClass>,
+    pub ionice: Option<u8>,
     pub cgroup: Option<String>,
     pub oom_scote_adj: Option<c_int>,
 }

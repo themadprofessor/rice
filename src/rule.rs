@@ -1,5 +1,6 @@
+use crate::class::IoClass;
 use crate::proc_type::Type;
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use libc::c_int;
 use nix::errno::Errno;
 use procfs::process::Process;
@@ -16,8 +17,8 @@ struct RawRule {
     proc_type: Option<String>,
     nice: Option<c_int>,
     #[serde(alias = "io-class")]
-    io_class: Option<String>,
-    ionice: Option<c_int>,
+    io_class: Option<IoClass>,
+    ionice: Option<u8>,
     cgroup: Option<String>,
 }
 
@@ -25,8 +26,8 @@ struct RawRule {
 pub struct Rule {
     pub proc_type: Option<Type>,
     pub nice: Option<c_int>,
-    pub io_class: Option<String>,
-    pub ionice: Option<c_int>,
+    pub io_class: Option<IoClass>,
+    pub ionice: Option<u8>,
     pub cgroup: Option<String>,
 }
 
@@ -61,6 +62,43 @@ impl Rule {
                         _ => panic!("unexpected errno [{}]", errno),
                     });
                 }
+            }
+        }
+
+        Ok(())
+    }
+
+    pub fn apply_io(&self, proc: &Process) -> Result<()> {
+        let class = self
+            .io_class
+            .or_else(|| self.proc_type.as_ref().and_then(|t| t.ioclass));
+
+        if let Some(c) = class {
+            // changing ionice either needs a syscall or run the ionice program
+            let mut cmd = std::process::Command::new("ionice");
+
+            match c {
+                IoClass::RealTime | IoClass::BestEffort => {
+                    let nice = self
+                        .ionice
+                        .or_else(|| self.proc_type.as_ref().and_then(|t| t.ionice));
+                    if let Some(n) = nice {
+                        cmd.args(&["-n".to_string(), n.to_string()]);
+                    }
+                }
+                _ => {}
+            }
+
+            cmd.args(&["-c".to_string(), c.to_string()]);
+
+            if !cmd
+                .spawn()
+                .context("failed to set ionice")?
+                .wait()
+                .context("failed to wait for ionice")?
+                .success()
+            {
+                bail!("failed to find process [{}]", proc.pid);
             }
         }
 
@@ -106,6 +144,20 @@ where
 {
     let mut f = BufReader::new(File::open(path).context("failed to open rule")?);
     crate::parse::parse(&mut f, |r: RawRule| {
+        if let Some(nice) = r.ionice {
+            if nice > 7 {
+                eprintln!("invalid ionice value {}", nice);
+                return;
+            }
+        }
+
+        if let Some(nice) = r.nice {
+            if nice > 20 || nice < -19 {
+                eprintln!("invalid nice value {}", nice);
+                return;
+            }
+        }
+
         let (name, rule) = (
             r.name,
             Rule {
@@ -116,6 +168,7 @@ where
                 cgroup: r.cgroup,
             },
         );
+
         map.insert(name, rule);
     })
 }
