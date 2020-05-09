@@ -20,7 +20,7 @@ fn main() {
 fn run() -> Result<()> {
     let rules = {
         let types = proc_type::build_types()?;
-        rule::build_rules(&types)?
+        rule::parse_rules(&types)?
     };
 
     all_procs()?

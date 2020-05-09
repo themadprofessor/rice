@@ -1,5 +1,5 @@
 use crate::proc_type::Type;
-use anyhow::{Context, Result, anyhow};
+use anyhow::{anyhow, Context, Result};
 use libc::c_int;
 use nix::errno::Errno;
 use procfs::process::Process;
@@ -68,24 +68,32 @@ impl Rule {
     }
 }
 
-pub fn build_rules(types: &HashMap<String, Type>) -> Result<HashMap<String, Rule>> {
+pub fn parse_rules(types: &HashMap<String, Type>) -> Result<HashMap<String, Rule>> {
     let mut map = HashMap::new();
-    for entry in std::fs::read_dir("/etc/ananicy.d/").context("failed to access config dir")? {
-        let entry = entry?;
-        let path = entry.path();
+    walk_dir("/etc/ananicy.d/", &mut map, types).context("failed to access config dir")?;
+    Ok(map)
+}
+
+fn walk_dir<T>(
+    path: T,
+    map: &mut HashMap<String, Rule>,
+    types: &HashMap<String, Type>,
+) -> Result<()>
+where
+    T: AsRef<Path>,
+{
+    for f in std::fs::read_dir(path).context("failed to access rule dir")? {
+        let path = f?.path();
         if path.is_dir() {
-            for f in std::fs::read_dir(&path).context("failed to access rule dir")? {
-                let path = f?.path();
-                if path.is_file() {
-                    parse_file(path, &mut map, types)?;
-                } else {
-                    // TODO
-                }
+            walk_dir(path, map, types)?;
+        } else if let Some(ex) = path.extension() {
+            if ex == "rules" {
+                parse_file(path, map, types)?;
             }
         }
     }
 
-    Ok(map)
+    Ok(())
 }
 
 fn parse_file<T>(
