@@ -2,13 +2,12 @@ use crate::class::IoClass;
 use crate::proc_type::Type;
 use anyhow::{anyhow, bail, Context, Result};
 use libc::c_int;
+use log::{debug, warn};
 use nix::errno::Errno;
 use procfs::process::Process;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::BufReader;
-use std::path::Path;
+use crate::cgroup::Cgroup;
 
 #[derive(Deserialize, Debug, PartialEq)]
 struct RawRule {
@@ -33,7 +32,8 @@ pub struct Rule {
 
 impl Rule {
     pub fn apply(&self, proc: &Process) -> Result<()> {
-        self.apply_nice(proc)
+        self.apply_nice(proc)?;
+        self.apply_io(proc)
     }
 
     pub fn apply_nice(&self, proc: &Process) -> Result<()> {
@@ -41,6 +41,7 @@ impl Rule {
             .nice
             .or_else(|| self.proc_type.as_ref().and_then(|t| t.nice))
         {
+            debug!("applying nice value {} to {}", nice, proc.pid);
             let ret;
             unsafe {
                 // nix hasn't implemented setpriority yet
@@ -49,7 +50,6 @@ impl Rule {
             }
             if ret == -1 {
                 let errno = nix::errno::errno();
-                eprintln!("FAILURE");
                 if errno != 0 {
                     let errno = Errno::from_i32(errno);
                     return Err(match errno {
@@ -74,6 +74,8 @@ impl Rule {
             .or_else(|| self.proc_type.as_ref().and_then(|t| t.ioclass));
 
         if let Some(c) = class {
+            debug!("applying ioclass {} to {}", c, proc.pid);
+
             // changing ionice either needs a syscall or run the ionice program
             let mut cmd = std::process::Command::new("ionice");
 
@@ -83,13 +85,14 @@ impl Rule {
                         .ionice
                         .or_else(|| self.proc_type.as_ref().and_then(|t| t.ionice));
                     if let Some(n) = nice {
+                        debug!("applying ionice {} to {}", n, proc.pid);
                         cmd.args(&["-n".to_string(), n.to_string()]);
                     }
                 }
                 _ => {}
             }
 
-            cmd.args(&["-c".to_string(), c.to_string()]);
+            cmd.args(&["-c", &(c as u8).to_string(), "-p", &proc.pid.to_string()]);
 
             if !cmd
                 .spawn()
@@ -106,54 +109,22 @@ impl Rule {
     }
 }
 
-pub fn parse_rules(types: &HashMap<String, Type>) -> Result<HashMap<String, Rule>> {
+pub fn parse_rules(
+    types: &HashMap<String, Type>,
+    _cgroups: &HashMap<String, Cgroup>,
+) -> HashMap<String, Rule> {
     let mut map = HashMap::new();
-    walk_dir("/etc/ananicy.d/", &mut map, types).context("failed to access config dir")?;
-    Ok(map)
-}
-
-fn walk_dir<T>(
-    path: T,
-    map: &mut HashMap<String, Rule>,
-    types: &HashMap<String, Type>,
-) -> Result<()>
-where
-    T: AsRef<Path>,
-{
-    for f in std::fs::read_dir(path).context("failed to access rule dir")? {
-        let path = f?.path();
-        if path.is_dir() {
-            walk_dir(path, map, types)?;
-        } else if let Some(ex) = path.extension() {
-            if ex == "rules" {
-                parse_file(path, map, types)?;
-            }
-        }
-    }
-
-    Ok(())
-}
-
-fn parse_file<T>(
-    path: T,
-    map: &mut HashMap<String, Rule>,
-    types: &HashMap<String, Type>,
-) -> Result<()>
-where
-    T: AsRef<Path>,
-{
-    let mut f = BufReader::new(File::open(path).context("failed to open rule")?);
-    crate::parse::parse(&mut f, |r: RawRule| {
+    crate::parse::walk("/etc/ananicy.d/", "rules", |r: RawRule| {
         if let Some(nice) = r.ionice {
             if nice > 7 {
-                eprintln!("invalid ionice value {}", nice);
+                warn!("invalid ionice value {} for rule {}", nice, r.name);
                 return;
             }
         }
 
         if let Some(nice) = r.nice {
             if nice > 20 || nice < -19 {
-                eprintln!("invalid nice value {}", nice);
+                warn!("invalid nice value {} for rule {}", nice, r.name);
                 return;
             }
         }
@@ -170,5 +141,7 @@ where
         );
 
         map.insert(name, rule);
-    })
+    });
+
+    map
 }

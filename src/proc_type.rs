@@ -1,10 +1,7 @@
 use crate::class::IoClass;
-use anyhow::Result;
 use libc::c_int;
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::fs::File;
-use std::io::BufReader;
 
 #[derive(Deserialize, Debug)]
 struct RawType {
@@ -41,14 +38,12 @@ impl From<RawType> for (String, Type) {
     }
 }
 
-pub fn build_types() -> Result<HashMap<String, Type>> {
+pub fn build_types() -> HashMap<String, Type> {
     let mut map = HashMap::new();
-    let mut reader = BufReader::new(File::open("/etc/ananicy.d/00-types.types")?);
-
-    crate::parse::parse(&mut reader, |raw: RawType| {
+    crate::parse::walk("/etc/ananicy.d/", "types", |raw: RawType| {
         let (name, proc_type) = raw.into();
         map.insert(name, proc_type);
-    })?;
+    });
 
-    Ok(map)
+    map
 }
