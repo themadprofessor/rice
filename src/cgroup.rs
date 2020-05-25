@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use controlgroup::v1::{Builder, UnifiedRepr, SubsystemKind};
+use controlgroup::v1::{Builder, UnifiedRepr};
 use log::{debug, warn, error};
 use procfs::process::Process;
 use serde::Deserialize;

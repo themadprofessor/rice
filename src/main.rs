@@ -5,7 +5,7 @@ use crate::cgroup::Cgroup;
 use crate::rule::Rule;
 use anyhow::{Context, Result};
 use libc::pid_t;
-use log::{error, warn};
+use log::{error, warn, info, trace};
 use procfs::process::Process;
 use std::collections::HashMap;
 use std::ffi::OsStr;
@@ -20,8 +20,18 @@ mod parse;
 mod proc_type;
 mod rule;
 
-fn main() {
+#[cfg(log = "stderr")]
+fn init_log() {
     pretty_env_logger::init();
+}
+
+#[cfg(log = "syslog")]
+fn init_log() {
+    syslog::init(syslog::Facility::LOG_DAEMON, log::LevelFilter::Debug, None).unwrap();
+}
+
+fn main() {
+    init_log();
     if let Err(e) = run() {
         error!("{}", e);
         std::process::exit(1);
@@ -32,6 +42,13 @@ fn run() -> Result<()> {
     let mut cgroups = cgroup::parse_cgroups();
     let types = proc_type::build_types();
     let rules = rule::parse_rules(&types);
+
+    info!("{} cgroups loaded", cgroups.len());
+    trace!("{:?}", cgroups);
+    info!("{} types loaded", types.len());
+    trace!("{:?}", types);
+    info!("{} rules loaded", rules.len());
+    trace!("{:?}", rules);
 
     let errors = all_procs()?
         .filter_map(|p| {
