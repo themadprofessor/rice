@@ -40,18 +40,15 @@ where
     T: DeserializeOwned,
     P: AsRef<Path>,
 {
-    let walker =
-        WalkDir::new(root)
-            .into_iter()
-            .filter_entry(|e: &DirEntry| {
-                if e.path().is_dir() {
-                    return true;
-                }
-                match e.path().extension() {
-                    Some(p) => p == ext,
-                    None => false,
-                }
-            });
+    let walker = WalkDir::new(root).into_iter().filter_entry(|e: &DirEntry| {
+        if e.path().is_dir() {
+            return true;
+        }
+        match e.path().extension() {
+            Some(p) => p == ext,
+            None => false,
+        }
+    });
 
     for entry in walker {
         if let Ok(entry) = entry {

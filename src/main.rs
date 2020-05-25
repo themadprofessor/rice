@@ -5,12 +5,15 @@ use crate::cgroup::Cgroup;
 use crate::rule::Rule;
 use anyhow::{Context, Result};
 use libc::pid_t;
-use log::{error, warn, info, trace};
+use log::{error, info, trace, warn};
 use procfs::process::Process;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 
 pub(crate) const ANANICY_CONFIG_DIR: &str = "/etc/ananicy.d";
 
@@ -50,25 +53,42 @@ fn run() -> Result<()> {
     info!("{} rules loaded", rules.len());
     trace!("{:?}", rules);
 
-    let errors = all_procs()?
-        .filter_map(|p| {
-            match p.exe() {
-                Ok(path) => path
-                    .file_name()
-                    .and_then(OsStr::to_str)
-                    .and_then(|f| rules.get(f)),
-                Err(e) => {
-                    error!("Are you root? {} [{:?}]", e, p.pid);
-                    None
-                }
-            }
-            .map(|r| (r, p))
-        })
-        .map(|(r, p)| apply_rule(r, p, &mut cgroups))
-        .filter_map(Result::err);
+    let term = Arc::new(AtomicBool::new(false));
+    signal_hook::flag::register(signal_hook::SIGINT, Arc::clone(&term))
+        .context("failed to register SIGINT handler")?;
+    signal_hook::flag::register(signal_hook::SIGTERM, Arc::clone(&term))
+        .context("failed to register SIGTERM handler")?;
 
-    for err in errors {
-        error!("{}", err);
+    while !term.load(Ordering::Relaxed) {
+        let errors = all_procs()?
+            .filter_map(|p| {
+                match p.exe() {
+                    Ok(path) => path
+                        .file_name()
+                        .and_then(OsStr::to_str)
+                        .and_then(|f| rules.get(f)),
+                    Err(e) => {
+                        error!("Are you root? {} [{:?}]", e, p.pid);
+                        None
+                    }
+                }
+                .map(|r| (r, p))
+            })
+            .map(|(r, p)| apply_rule(r, p, &mut cgroups))
+            .filter_map(Result::err);
+
+        for err in errors {
+            error!("{}", err);
+        }
+
+        let mut remaining = Duration::from_secs(5);
+        while let Some(remain) = shuteye::sleep(remaining) {
+            if term.load(Ordering::Relaxed) {
+                break;
+            }
+
+            remaining = remain;
+        }
     }
 
     Ok(())

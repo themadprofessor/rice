@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
 use controlgroup::v1::{Builder, UnifiedRepr};
-use log::{debug, warn, error};
+use log::{debug, error, warn};
 use procfs::process::Process;
 use serde::Deserialize;
 use std::collections::HashMap;
