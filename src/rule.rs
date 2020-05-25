@@ -1,9 +1,6 @@
-use crate::cgroup::Cgroup;
 use crate::class::IoClass;
 use crate::proc_type::Type;
 use anyhow::{anyhow, bail, Context, Result};
-use controlgroup::v1::UnifiedRepr;
-use controlgroup::Pid;
 use libc::c_int;
 use log::{debug, warn};
 use nix::errno::Errno;

@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use controlgroup::v1::Cgroup as CgroupTrait;
 use controlgroup::v1::{Builder, UnifiedRepr};
 use log::warn;
 use procfs::process::Process;

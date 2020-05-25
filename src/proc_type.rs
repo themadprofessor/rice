@@ -1,9 +1,6 @@
-use crate::cgroup::Cgroup;
 use crate::class::IoClass;
-use controlgroup::v1::UnifiedRepr;
 use libc::c_int;
 use serde::Deserialize;
-use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 #[derive(Deserialize, Debug)]

@@ -8,6 +8,9 @@ use procfs::process::Process;
 use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::str::FromStr;
+use std::collections::HashMap;
+use crate::cgroup::Cgroup;
+use crate::rule::Rule;
 
 mod cgroup;
 mod class;
@@ -28,7 +31,7 @@ fn run() -> Result<()> {
     let types = proc_type::build_types();
     let rules = rule::parse_rules(&types);
 
-    all_procs()?
+    let errors = all_procs()?
         .filter_map(|p| {
             match p.exe() {
                 Ok(path) => path
@@ -42,19 +45,23 @@ fn run() -> Result<()> {
             }
             .map(|r| (r, p))
         })
-        .for_each(|(r, p)| {
-            if let Err(e) = r.apply(&p) {
-                error!("{}", e);
-            }
-            if let Some(cgroup) = r.cgroup_name() {
-                if let Some(proc) = cgroups.get_mut(cgroup) {
-                    if let Err(e) = proc.apply(&p) {
-                        error!("{}", e);
-                    }
-                }
-            }
-        });
+        .map(|(r, p)| apply_rule(r, p, &mut cgroups))
+        .filter_map(Result::err);
 
+    for err in errors {
+        error!("{}", err);
+    }
+
+    Ok(())
+}
+
+fn apply_rule(r: &Rule, p: Process, cgroups: &mut HashMap<String, Cgroup>) -> Result<()> {
+    r.apply(&p)?;
+    if let Some(cgroup_name) = r.cgroup_name() {
+        if let Some(cgroup) = cgroups.get_mut(cgroup_name) {
+            cgroup.apply(&p)?;
+        }
+    }
     Ok(())
 }
 
