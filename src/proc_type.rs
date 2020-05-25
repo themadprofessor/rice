@@ -1,6 +1,9 @@
+use crate::cgroup::Cgroup;
 use crate::class::IoClass;
+use controlgroup::v1::UnifiedRepr;
 use libc::c_int;
 use serde::Deserialize;
+use std::collections::hash_map::Entry;
 use std::collections::HashMap;
 
 #[derive(Deserialize, Debug)]
@@ -14,7 +17,7 @@ struct RawType {
     oom_scote_adj: Option<c_int>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug)]
 pub struct Type {
     pub nice: Option<c_int>,
     pub ioclass: Option<IoClass>,
@@ -23,26 +26,19 @@ pub struct Type {
     pub oom_scote_adj: Option<c_int>,
 }
 
-impl From<RawType> for (String, Type) {
-    fn from(x: RawType) -> Self {
-        (
-            x.proc_type,
-            Type {
-                nice: x.nice,
-                ioclass: x.ioclass,
-                ionice: x.ionice,
-                cgroup: x.cgroup,
-                oom_scote_adj: x.oom_scote_adj,
-            },
-        )
-    }
-}
-
 pub fn build_types() -> HashMap<String, Type> {
     let mut map = HashMap::new();
     crate::parse::walk("/etc/ananicy.d/", "types", |raw: RawType| {
-        let (name, proc_type) = raw.into();
-        map.insert(name, proc_type);
+        map.insert(
+            raw.proc_type,
+            Type {
+                nice: raw.nice,
+                ionice: raw.ionice,
+                ioclass: raw.ioclass,
+                cgroup: raw.cgroup,
+                oom_scote_adj: raw.oom_scote_adj,
+            },
+        );
     });
 
     map

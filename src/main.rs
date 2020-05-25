@@ -24,11 +24,9 @@ fn main() {
 }
 
 fn run() -> Result<()> {
-    let rules = {
-        let types = proc_type::build_types();
-        let cgroups = cgroup::parse_cgroups();
-        rule::parse_rules(&types, &cgroups)
-    };
+    let mut cgroups = cgroup::parse_cgroups();
+    let types = proc_type::build_types();
+    let rules = rule::parse_rules(&types);
 
     all_procs()?
         .filter_map(|p| {
@@ -47,6 +45,13 @@ fn run() -> Result<()> {
         .for_each(|(r, p)| {
             if let Err(e) = r.apply(&p) {
                 error!("{}", e);
+            }
+            if let Some(cgroup) = r.cgroup_name() {
+                if let Some(proc) = cgroups.get_mut(cgroup) {
+                    if let Err(e) = proc.apply(&p) {
+                        error!("{}", e);
+                    }
+                }
             }
         });
 

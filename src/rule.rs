@@ -1,13 +1,15 @@
+use crate::cgroup::Cgroup;
 use crate::class::IoClass;
 use crate::proc_type::Type;
 use anyhow::{anyhow, bail, Context, Result};
+use controlgroup::v1::UnifiedRepr;
+use controlgroup::Pid;
 use libc::c_int;
 use log::{debug, warn};
 use nix::errno::Errno;
 use procfs::process::Process;
 use serde::Deserialize;
 use std::collections::HashMap;
-use crate::cgroup::Cgroup;
 
 #[derive(Deserialize, Debug, PartialEq)]
 struct RawRule {
@@ -22,15 +24,19 @@ struct RawRule {
 }
 
 #[derive(Debug)]
-pub struct Rule {
-    pub proc_type: Option<Type>,
+pub struct Rule<'a> {
+    pub proc_type: Option<&'a Type>,
     pub nice: Option<c_int>,
     pub io_class: Option<IoClass>,
     pub ionice: Option<u8>,
     pub cgroup: Option<String>,
 }
 
-impl Rule {
+impl<'a> Rule<'a> {
+    pub fn cgroup_name(&self) -> Option<&String> {
+        self.cgroup.as_ref().or_else(|| self.proc_type.and_then(|t| t.cgroup.as_ref()))
+    }
+
     pub fn apply(&self, proc: &Process) -> Result<()> {
         self.apply_nice(proc)?;
         self.apply_io(proc)
@@ -109,10 +115,9 @@ impl Rule {
     }
 }
 
-pub fn parse_rules(
-    types: &HashMap<String, Type>,
-    _cgroups: &HashMap<String, Cgroup>,
-) -> HashMap<String, Rule> {
+pub fn parse_rules<'a>(
+    types: &'a HashMap<String, Type>,
+) -> HashMap<String, Rule<'a>> {
     let mut map = HashMap::new();
     crate::parse::walk("/etc/ananicy.d/", "rules", |r: RawRule| {
         if let Some(nice) = r.ionice {
@@ -132,7 +137,7 @@ pub fn parse_rules(
         let (name, rule) = (
             r.name,
             Rule {
-                proc_type: r.proc_type.and_then(|t| types.get(&t)).map(Clone::clone),
+                proc_type: r.proc_type.and_then(|t| types.get(&t)),
                 nice: r.nice,
                 io_class: r.io_class,
                 ionice: r.ionice,
