@@ -1,6 +1,6 @@
 use anyhow::{Context, Result};
-use controlgroup::v1::{Builder, UnifiedRepr};
-use log::warn;
+use controlgroup::v1::{Builder, UnifiedRepr, SubsystemKind};
+use log::{debug, warn, error};
 use procfs::process::Process;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -22,7 +22,7 @@ struct RawCgroup {
 pub fn parse_cgroups() -> HashMap<String, Cgroup> {
     let mut map = HashMap::new();
 
-    crate::parse::walk("/etc/ananicy.d/", "cgroups", |r: RawCgroup| {
+    crate::parse::walk(crate::ANANICY_CONFIG_DIR, "cgroups", |r: RawCgroup| {
         if r.cpu_quota > 100 {
             warn!("invalid CPUQuota {} for rule {}", r.cpu_quota, r.cgroup);
         } else {
@@ -37,7 +37,8 @@ pub fn parse_cgroups() -> HashMap<String, Cgroup> {
 
             let builder = Builder::new(PathBuf::from(&r.cgroup))
                 .cpu()
-                .shares(1025 * r.cpu_quota as u64 / 100)
+                // Don't ask me, just copied ananicy
+                .shares(1024 * r.cpu_quota as u64 / 100)
                 .cfs_period_us(PERIOD_US)
                 .cfs_quota_us(quota)
                 .done();
@@ -59,6 +60,7 @@ pub fn parse_cgroups() -> HashMap<String, Cgroup> {
 
 impl Cgroup {
     pub fn apply(&mut self, proc: &Process) -> Result<()> {
+        debug!("applying cgroup to process {}", proc.pid);
         self.0
             .add_task(
                 u32::try_from(proc.pid)
@@ -66,5 +68,13 @@ impl Cgroup {
                     .into(),
             )
             .context("failed to add process to cgroup")
+    }
+}
+
+impl Drop for Cgroup {
+    fn drop(&mut self) {
+        if let Err(e) = self.0.delete() {
+            error!("failed to delete cgroup {}", e);
+        }
     }
 }

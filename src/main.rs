@@ -1,16 +1,18 @@
 #[cfg(not(unix))]
 compile_error!("only unix systems are supported");
 
+use crate::cgroup::Cgroup;
+use crate::rule::Rule;
 use anyhow::{Context, Result};
 use libc::pid_t;
 use log::{error, warn};
 use procfs::process::Process;
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::PathBuf;
 use std::str::FromStr;
-use std::collections::HashMap;
-use crate::cgroup::Cgroup;
-use crate::rule::Rule;
+
+pub(crate) const ANANICY_CONFIG_DIR: &str = "/etc/ananicy.d";
 
 mod cgroup;
 mod class;

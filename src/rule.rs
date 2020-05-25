@@ -31,7 +31,9 @@ pub struct Rule<'a> {
 
 impl<'a> Rule<'a> {
     pub fn cgroup_name(&self) -> Option<&String> {
-        self.cgroup.as_ref().or_else(|| self.proc_type.and_then(|t| t.cgroup.as_ref()))
+        self.cgroup
+            .as_ref()
+            .or_else(|| self.proc_type.and_then(|t| t.cgroup.as_ref()))
     }
 
     pub fn apply(&self, proc: &Process) -> Result<()> {
@@ -89,7 +91,7 @@ impl<'a> Rule<'a> {
                         .or_else(|| self.proc_type.as_ref().and_then(|t| t.ionice));
                     if let Some(n) = nice {
                         debug!("applying ionice {} to {}", n, proc.pid);
-                        cmd.args(&["-n".to_string(), n.to_string()]);
+                        cmd.args(&["-n", &n.to_string()]);
                     }
                 }
                 _ => {}
@@ -112,11 +114,9 @@ impl<'a> Rule<'a> {
     }
 }
 
-pub fn parse_rules<'a>(
-    types: &'a HashMap<String, Type>,
-) -> HashMap<String, Rule<'a>> {
+pub fn parse_rules(types: &HashMap<String, Type>) -> HashMap<String, Rule> {
     let mut map = HashMap::new();
-    crate::parse::walk("/etc/ananicy.d/", "rules", |r: RawRule| {
+    crate::parse::walk(crate::ANANICY_CONFIG_DIR, "rules", |r: RawRule| {
         if let Some(nice) = r.ionice {
             if nice > 7 {
                 warn!("invalid ionice value {} for rule {}", nice, r.name);

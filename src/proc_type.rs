@@ -25,7 +25,7 @@ pub struct Type {
 
 pub fn build_types() -> HashMap<String, Type> {
     let mut map = HashMap::new();
-    crate::parse::walk("/etc/ananicy.d/", "types", |raw: RawType| {
+    crate::parse::walk(crate::ANANICY_CONFIG_DIR, "types", |raw: RawType| {
         map.insert(
             raw.proc_type,
             Type {
