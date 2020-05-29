@@ -2,6 +2,7 @@
 
 [![standard-readme compliant](https://img.shields.io/badge/readme%20style-standard-brightgreen.svg?style=flat-square)](https://github.com/RichardLitt/standard-readme)
 ![GitHub](https://img.shields.io/github/license/themadprofessor/rice?style=flat-square)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fthemadprofessor%2Frice.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2Fthemadprofessor%2Frice?ref=badge_shield)
 [![](https://tokei.rs/b1/github/themadprofessor/rice)](https://github.com/themadprofessor/rice).
 
 A clone of the wonderful [Ananicy](https://github.com/Nefelim4ag/Ananicy) tool to Rust.
@@ -42,3 +43,5 @@ PRs accepted.
 ## License
 
 MIT © Stuart Reilly
+
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2Fthemadprofessor%2Frice.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2Fthemadprofessor%2Frice?ref=badge_large)
